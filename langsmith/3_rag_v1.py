@@ -2,6 +2,9 @@
 
 import os
 from dotenv import load_dotenv
+load_dotenv()
+os.environ["LANGSMITH_PROJECT"] = "RagTest"
+
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -10,7 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 
-load_dotenv()  # expects OPENAI_API_KEY in .env
+  # expects OPENAI_API_KEY in .env
 
 PDF_PATH = "islr.pdf"  # <-- change to your PDF filename
 

@@ -1,0 +1,51 @@
+employee_id,employee_name,employee_email,employee_grade,is_manager,employee_department
+EMP001,Arjun Sharma,arjun.sharma@company.com,L5,Yes,Engineering
+EMP002,Priya Nair,priya.nair@company.com,L3,No,Engineering
+EMP003,Rajesh Iyer,rajesh.iyer@company.com,L4,No,Engineering
+EMP004,Sneha Reddy,sneha.reddy@company.com,L6,Yes,Product
+EMP005,Vikram Patil,vikram.patil@company.com,L2,No,QA
+EMP006,Ananya Deshmukh,ananya.deshmukh@company.com,L3,No,Engineering
+EMP007,Karthik Menon,karthik.menon@company.com,L5,Yes,DevOps
+EMP008,Divya Kulkarni,divya.kulkarni@company.com,L4,No,Data Science
+EMP009,Suresh Joshi,suresh.joshi@company.com,L7,Yes,Engineering
+EMP010,Meera Pillai,meera.pillai@company.com,L3,No,Design
+EMP011,Rohit Deshpande,rohit.deshpande@company.com,L2,No,QA
+EMP012,Kavita Rao,kavita.rao@company.com,L5,Yes,Data Science
+EMP013,Anil Kumar,anil.kumar@company.com,L4,No,Engineering
+EMP014,Pooja Hegde,pooja.hegde@company.com,L3,No,Product
+EMP015,Siddharth Pai,siddharth.pai@company.com,L6,Yes,Infrastructure
+EMP016,Lakshmi Venkatesh,lakshmi.venkatesh@company.com,L2,No,Support
+EMP017,Ganesh Bhatt,ganesh.bhatt@company.com,L4,No,Engineering
+EMP018,Ritu Saxena,ritu.saxena@company.com,L3,No,Design
+EMP019,Manoj Tiwari,manoj.tiwari@company.com,L5,Yes,QA
+EMP020,Swati Phadke,swati.phadke@company.com,L4,No,Data Science
+EMP021,Deepak Bhat,deepak.bhat@company.com,L2,No,Support
+EMP022,Nandini Shetty,nandini.shetty@company.com,L6,Yes,Engineering
+EMP023,Prasad Gokhale,prasad.gokhale@company.com,L3,No,DevOps
+EMP024,Shruti Kamat,shruti.kamat@company.com,L4,No,Product
+EMP025,Ramesh Naik,ramesh.naik@company.com,L5,Yes,Security
+EMP026,Aditi Jog,aditi.jog@company.com,L2,No,Engineering
+EMP027,Nikhil Prabhu,nikhil.prabhu@company.com,L3,No,QA
+EMP028,Tanvi Mukherjee,tanvi.mukherjee@company.com,L4,No,Data Science
+EMP029,Sachin Sathe,sachin.sathe@company.com,L7,Yes,Product
+EMP030,Rashmi Kale,rashmi.kale@company.com,L3,No,Design
+EMP031,Abhishek Karve,abhishek.karve@company.com,L2,No,Support
+EMP032,Pallavi Chitnis,pallavi.chitnis@company.com,L5,Yes,DevOps
+EMP033,Vivek Datar,vivek.datar@company.com,L4,No,Engineering
+EMP034,Sonal Apte,sonal.apte@company.com,L3,No,Infrastructure
+EMP035,Amol Gadgil,amol.gadgil@company.com,L6,Yes,Engineering
+EMP036,Neha Wagh,neha.wagh@company.com,L2,No,QA
+EMP037,Tushar Paranjpe,tushar.paranjpe@company.com,L4,No,Security
+EMP038,Manasi Phatak,manasi.phatak@company.com,L3,No,Engineering
+EMP039,Hemant Lele,hemant.lele@company.com,L5,Yes,Support
+EMP040,Bhagyashree Kolhe,bhagyashree.kolhe@company.com,L2,No,Data Science
+EMP041,Ashwin Deshpande,ashwin.deshpande@company.com,L6,Yes,QA
+EMP042,Sunita Godbole,sunita.godbole@company.com,L5,Yes,Design
+EMP043,Raghav Kulkarni,raghav.kulkarni@company.com,L7,Yes,Data Science
+EMP044,Jyoti Tambe,jyoti.tambe@company.com,L5,Yes,Security
+EMP045,Aniket Dixit,aniket.dixit@company.com,L6,Yes,Infrastructure
+EMP046,Smita Barve,smita.barve@company.com,L5,Yes,Engineering
+EMP047,Omkar Joshi,omkar.joshi@company.com,L6,Yes,Product
+EMP048,Leena Pandit,leena.pandit@company.com,L5,Yes,Support
+EMP049,Harish Gogate,harish.gogate@company.com,L7,Yes,DevOps
+EMP050,Varsha Pendse,varsha.pendse@company.com,L6,Yes,Engineering

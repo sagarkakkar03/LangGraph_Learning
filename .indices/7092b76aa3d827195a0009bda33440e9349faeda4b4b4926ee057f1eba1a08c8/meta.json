@@ -1,0 +1,6 @@
+{
+  "pdf_path": "/Users/sagar/Desktop/coding/LangGraph_Practice/islr.pdf",
+  "chunk_size": 1000,
+  "chunk_overlap": 150,
+  "embedding_model": "text-embedding-3-small"
+}
