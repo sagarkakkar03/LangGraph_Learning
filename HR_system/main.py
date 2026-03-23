@@ -1,13 +1,25 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from contextlib import asynccontextmanager
 from typing import Optional
 
-from config import EMAIL_ADDRESSES, DEPARTMENTS
+from fastapi import FastAPI, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from config import EMAIL_ADDRESSES
+from database import init_db, get_db, Employee, Department
 from graph import workflow
+from rag_agent import ask_hr
 
-app = FastAPI(title="HR Email Routing System")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(title="HR Email Routing System", lifespan=lifespan)
+
+
+# ---- Pydantic schemas ----
 
 class EmailRequest(BaseModel):
     sender_email: str
@@ -21,8 +33,30 @@ class EmailResponse(BaseModel):
     department: str
     reasoning: str
     response: str
+    employee_name: Optional[str] = None
+    employee_id: Optional[str] = None
     email_status: Optional[dict] = None
 
+
+class EmployeeOut(BaseModel):
+    employee_id: str
+    name: str
+    email: str
+    grade: str
+    is_manager: bool
+    country: str
+    department: str
+
+    model_config = {"from_attributes": True}
+
+
+class DepartmentOut(BaseModel):
+    id: int
+    name: str
+    employee_count: int
+
+
+# ---- Email routing ----
 
 @app.post("/send", response_model=EmailResponse)
 async def route_email(request: EmailRequest):
@@ -37,8 +71,78 @@ async def route_email(request: EmailRequest):
         department=result["department"],
         reasoning=result["reasoning"],
         response=result["response"],
+        employee_name=result.get("employee_name"),
+        employee_id=result.get("employee_id"),
         email_status=result.get("email_status"),
     )
+
+
+# ---- RAG query ----
+
+class AskRequest(BaseModel):
+    query: str
+    country: Optional[str] = None
+
+
+class AskResponse(BaseModel):
+    answer: str
+    sources: list[str] = []
+    needs_escalation: bool = False
+    escalation_email: Optional[str] = None
+    escalation_department: Optional[str] = None
+    escalation_reason: Optional[str] = None
+
+
+@app.post("/ask", response_model=AskResponse)
+async def ask_question(request: AskRequest):
+    result = ask_hr(query=request.query, sender_country=request.country)
+    return AskResponse(
+        answer=result.get("answer", ""),
+        sources=result.get("source_docs", []),
+        needs_escalation=result.get("needs_escalation", False),
+        escalation_email=result.get("escalation_email"),
+        escalation_department=result.get("escalation_department"),
+        escalation_reason=result.get("escalation_reason"),
+    )
+
+
+# ---- Employee endpoints ----
+
+@app.get("/employees", response_model=list[EmployeeOut])
+async def list_employees(
+    department: Optional[str] = Query(None),
+    country: Optional[str] = Query(None),
+    is_manager: Optional[bool] = Query(None),
+    db: Session = Depends(get_db),
+):
+    q = db.query(Employee)
+    if department:
+        q = q.join(Department).filter(Department.name == department)
+    if country:
+        q = q.filter(Employee.country == country)
+    if is_manager is not None:
+        q = q.filter(Employee.is_manager == is_manager)
+    employees = q.all()
+    return [e.to_dict() for e in employees]
+
+
+@app.get("/employees/{employee_id}", response_model=EmployeeOut)
+async def get_employee(employee_id: str, db: Session = Depends(get_db)):
+    emp = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return emp.to_dict()
+
+
+# ---- Department endpoints ----
+
+@app.get("/departments", response_model=list[DepartmentOut])
+async def list_departments(db: Session = Depends(get_db)):
+    depts = db.query(Department).all()
+    return [
+        {"id": d.id, "name": d.name, "employee_count": len(d.employees)}
+        for d in depts
+    ]
 
 
 @app.get("/emails")
@@ -49,190 +153,3 @@ async def list_emails():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
-
-
-def _build_email_chips() -> str:
-    chips = [
-        f'<span class="email-chip">'
-        f'<span class="dot" style="background:#6c63ff"></span>'
-        f'{EMAIL_ADDRESSES["main"]}</span>'
-    ]
-    for dept, info in DEPARTMENTS.items():
-        color = info.get("color", "#999")
-        chips.append(
-            f'<span class="email-chip">'
-            f'<span class="dot" style="background:{color}"></span>'
-            f'{EMAIL_ADDRESSES[dept]}</span>'
-        )
-    return "\n    ".join(chips)
-
-
-def _build_banner_css() -> str:
-    rules = []
-    for dept, info in DEPARTMENTS.items():
-        color = info.get("color", "#999")
-        rules.append(
-            f".route-banner.{dept} {{ "
-            f"background: {color}18; border-left: 4px solid {color}; }}"
-        )
-    return "\n  ".join(rules)
-
-
-@app.get("/", response_class=HTMLResponse)
-async def ui():
-    email_chips = _build_email_chips()
-    banner_css = _build_banner_css()
-    main_email = EMAIL_ADDRESSES["main"]
-
-    return f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HR Email Router</title>
-<style>
-  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background: #f0f2f5; color: #1a1a2e; min-height: 100vh;
-    display: flex; justify-content: center; padding: 40px 16px;
-  }}
-  .container {{ width: 100%; max-width: 760px; }}
-  h1 {{ font-size: 1.8rem; margin-bottom: 4px; }}
-  .subtitle {{ color: #555; margin-bottom: 28px; font-size: 0.95rem; }}
-  .emails-bar {{
-    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px;
-  }}
-  .email-chip {{
-    background: #fff; border: 1px solid #ddd; border-radius: 20px;
-    padding: 6px 14px; font-size: 0.8rem; color: #333;
-    display: flex; align-items: center; gap: 6px;
-  }}
-  .dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }}
-  .card {{
-    background: #fff; border-radius: 12px; padding: 28px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px;
-  }}
-  label {{ display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }}
-  input, textarea {{
-    width: 100%; padding: 10px 14px; border: 1px solid #ddd;
-    border-radius: 8px; font-size: 0.95rem; font-family: inherit;
-    transition: border-color 0.2s;
-  }}
-  input:focus, textarea:focus {{ outline: none; border-color: #6c63ff; }}
-  textarea {{ resize: vertical; min-height: 120px; }}
-  .field + .field {{ margin-top: 16px; }}
-  button {{
-    margin-top: 20px; width: 100%; padding: 12px;
-    background: #6c63ff; color: #fff; border: none; border-radius: 8px;
-    font-size: 1rem; font-weight: 600; cursor: pointer;
-    transition: background 0.2s;
-  }}
-  button:hover {{ background: #5a52d5; }}
-  button:disabled {{ background: #aaa; cursor: not-allowed; }}
-  .result {{ display: none; }}
-  .result.show {{ display: block; }}
-  .route-banner {{
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 18px; border-radius: 8px;
-    margin-bottom: 18px; font-size: 0.92rem;
-  }}
-  {banner_css}
-  .route-banner strong {{ font-size: 0.95rem; }}
-  .meta {{ font-size: 0.85rem; color: #666; margin-bottom: 14px; }}
-  .email-tag {{
-    display: inline-block; background: #eef; color: #6c63ff;
-    padding: 2px 10px; border-radius: 12px; font-size: 0.78rem;
-    margin-top: 6px;
-  }}
-  .response-text {{
-    background: #fafafa; border: 1px solid #eee; border-radius: 8px;
-    padding: 18px; white-space: pre-wrap; line-height: 1.6; font-size: 0.92rem;
-  }}
-  .spinner {{
-    display: inline-block; width: 18px; height: 18px;
-    border: 2px solid #fff; border-top-color: transparent;
-    border-radius: 50%; animation: spin 0.6s linear infinite;
-    vertical-align: middle; margin-right: 8px;
-  }}
-  @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>HR Email Router</h1>
-  <p class="subtitle">Send a query to <strong>{main_email}</strong> &mdash; it gets routed to the right department and an email is sent automatically.</p>
-
-  <div class="emails-bar">
-    {email_chips}
-  </div>
-
-  <div class="card">
-    <div class="field">
-      <label for="email">Your Email</label>
-      <input id="email" type="email" placeholder="you@example.com" />
-    </div>
-    <div class="field">
-      <label for="query">Your Query</label>
-      <textarea id="query" placeholder="e.g. I haven't received my pay slip for March..."></textarea>
-    </div>
-    <button id="sendBtn" onclick="send()">Send to HR</button>
-  </div>
-
-  <div class="result card" id="resultCard">
-    <div class="route-banner" id="banner">
-      <div>
-        <strong id="deptLabel"></strong><br/>
-        <span id="routeLabel"></span><br/>
-        <span class="email-tag" id="emailTag"></span>
-      </div>
-    </div>
-    <p class="meta" id="reasonText"></p>
-    <label>Response</label>
-    <div class="response-text" id="responseText"></div>
-  </div>
-</div>
-<script>
-async function send() {{
-  const btn = document.getElementById('sendBtn');
-  const email = document.getElementById('email').value.trim();
-  const query = document.getElementById('query').value.trim();
-  if (!email || !query) return alert('Please fill in both fields.');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Routing & sending...';
-  document.getElementById('resultCard').classList.remove('show');
-  try {{
-    const res = await fetch('/send', {{
-      method: 'POST',
-      headers: {{'Content-Type': 'application/json'}},
-      body: JSON.stringify({{sender_email: email, query}})
-    }});
-    const data = await res.json();
-    const banner = document.getElementById('banner');
-    banner.className = 'route-banner ' + data.department;
-    document.getElementById('deptLabel').textContent =
-      data.department.replace(/_/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
-    document.getElementById('routeLabel').textContent =
-      data.routed_from + '  \\u2192  ' + data.routed_to;
-    const es = data.email_status;
-    const tag = document.getElementById('emailTag');
-    if (es && es.reply && es.reply.success) {{
-      tag.textContent = es.reply.message;
-    }} else {{
-      tag.textContent = 'Email delivery pending \\u2014 check SMTP config';
-    }}
-    document.getElementById('reasonText').textContent = data.reasoning;
-    document.getElementById('responseText').textContent = data.response;
-    document.getElementById('resultCard').classList.add('show');
-  }} catch (e) {{
-    alert('Error: ' + e.message);
-  }} finally {{
-    btn.disabled = false;
-    btn.textContent = 'Send to HR';
-  }}
-}}
-</script>
-</body>
-</html>
-"""

@@ -1,6 +1,13 @@
 langgraph
 langchain-openai
+langchain-community
+langchain-text-splitters
+langsmith
+faiss-cpu
+python-docx
 fastapi
 uvicorn
 python-dotenv
 pydantic
+sqlalchemy
+psycopg2-binary
