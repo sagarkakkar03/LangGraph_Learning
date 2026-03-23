@@ -10,6 +10,7 @@ from config import (
     DEPARTMENT_KEYS,
     CLASSIFIER_PROMPT_TEMPLATE,
     HANDLER_PROMPT_TEMPLATE,
+    DOC_ESCALATION_TO_DEPT,
 )
 
 from email_service import forward_to_department
@@ -108,7 +109,11 @@ def route_to_department(state: HRState) -> str:
 
 
 def rag_lookup(state: HRState):
-    """Run the RAG agent to find relevant HR documents for this query."""
+    """Run the RAG agent to find relevant HR documents for this query.
+    
+    Also overrides the classifier's department routing when the retrieved
+    documents point to a different team (e.g. leave policies → people_team).
+    """
     rag_result = ask_hr(
         query=state.query,
         sender_country=state.employee_country,
@@ -121,11 +126,28 @@ def rag_lookup(state: HRState):
             "department": rag_result.get("escalation_department"),
             "reason": rag_result.get("escalation_reason"),
         }
-    return {
+
+    updates: dict = {
         "rag_answer": rag_result.get("answer", ""),
         "rag_sources": rag_result.get("source_docs", []),
         "rag_escalation": escalation,
     }
+
+    # Let the document metadata override the classifier's department pick.
+    # The documents carry an escalation_department (e.g. "people_operations")
+    # which we map to our routing keys (e.g. "people_team").
+    chunks = rag_result.get("retrieved_chunks", [])
+    if chunks:
+        esc_depts = [c.get("escalation_department") for c in chunks if c.get("escalation_department")]
+        if esc_depts:
+            from collections import Counter
+            most_common_esc = Counter(esc_depts).most_common(1)[0][0]
+            mapped = DOC_ESCALATION_TO_DEPT.get(most_common_esc)
+            if mapped and mapped in DEPARTMENT_KEYS:
+                updates["department"] = mapped
+                updates["target_email"] = EMAIL_ADDRESSES[mapped]
+
+    return updates
 
 
 def _make_handler(department: str):

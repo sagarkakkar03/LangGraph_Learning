@@ -50,6 +50,7 @@ class RAGState(BaseModel):
     sender_country: Optional[str] = None
     has_attachments: bool = False
 
+    target_country: Optional[str] = None
     retrieved_chunks: list[dict] = []
     source_docs: list[str] = []
     answer: str = ""
@@ -58,6 +59,15 @@ class RAGState(BaseModel):
     escalation_email: Optional[str] = None
     escalation_department: Optional[str] = None
     escalation_reason: Optional[str] = None
+
+
+class QueryAnalysis(BaseModel):
+    target_country: Optional[str] = Field(
+        description="The country explicitly mentioned in the query, if any. "
+        "Must be one of: 'India', 'Argentina', 'Brazil', 'Pakistan', 'United States'. "
+        "If 'USA' or 'US' is mentioned, return 'United States'. "
+        "If no country is mentioned, return None."
+    )
 
 
 class EscalationDecision(BaseModel):
@@ -71,24 +81,37 @@ class EscalationDecision(BaseModel):
 #  Nodes
 # ------------------------------------------------------------------ #
 
+def analyze_query(state: RAGState):
+    """Determine if the user is asking about a specific country's policy."""
+    analyzer = model.with_structured_output(QueryAnalysis)
+    result = analyzer.invoke(
+        f"Analyze this HR query to see if it specifically asks about a certain country's policy.\n\n"
+        f"Query: {state.query}"
+    )
+    
+    # Map sender country if it's USA
+    sender_country = state.sender_country
+    if sender_country and sender_country.upper() in ["USA", "US"]:
+        sender_country = "United States"
+
+    # Target country is either the one explicitly asked for, or the sender's country
+    target_country = result.target_country or sender_country
+    
+    return {"target_country": target_country}
+
+
 def retrieve(state: RAGState):
     if vectorstore is None:
         return {"retrieved_chunks": [], "source_docs": []}
 
-    filters = {}
-    if state.sender_country:
-        filters["country"] = state.sender_country
+    kwargs = {"k": RAG_TOP_K, "fetch_k": 400}
+    if state.target_country:
+        kwargs["filter"] = {"country": state.target_country}
 
-    if filters:
-        results = vectorstore.similarity_search(
-            state.query,
-            k=RAG_TOP_K,
-            filter=filters,
-        )
-        if len(results) < 3:
-            results = vectorstore.similarity_search(state.query, k=RAG_TOP_K)
-    else:
-        results = vectorstore.similarity_search(state.query, k=RAG_TOP_K)
+    # We use a high fetch_k because FAISS fetches first, then filters.
+    # We DO NOT fallback to an unfiltered search if results are low, 
+    # because giving an employee another country's HR policy is a compliance risk.
+    results = vectorstore.similarity_search(state.query, **kwargs)
 
     chunks = []
     source_codes = set()
@@ -130,11 +153,11 @@ def generate_answer(state: RAGState):
     context = "\n\n---\n\n".join(context_parts)
 
     prompt = (
-        "You are an HR assistant. Answer the employee's question using ONLY the "
-        "HR policy documents provided below. Be specific, cite the document code "
-        "and title when referencing a policy, and be professional.\n\n"
-        "If the documents don't fully answer the question, say what you can "
-        "and note that the employee should contact the relevant team for more details.\n\n"
+        f"You are an HR assistant for employees based in {state.target_country or 'the company'}. "
+        "Answer the employee's question using ONLY the HR policy documents provided below. "
+        "Be specific, cite the document code and title when referencing a policy, and be professional.\n\n"
+        "If the documents don't fully answer the question for their specific country, say what you can "
+        "and note that the employee should contact the relevant team for more details. DO NOT use or mention policies from other countries.\n\n"
         f"## Retrieved HR Documents\n\n{context}\n\n"
         f"## Employee Question\n\n{state.query}\n\n"
         "## Your Answer"
@@ -208,11 +231,13 @@ def check_escalation(state: RAGState):
 
 rag_graph = StateGraph(RAGState)
 
+rag_graph.add_node("analyze_query", analyze_query)
 rag_graph.add_node("retrieve", retrieve)
 rag_graph.add_node("generate_answer", generate_answer)
 rag_graph.add_node("check_escalation", check_escalation)
 
-rag_graph.add_edge(START, "retrieve")
+rag_graph.add_edge(START, "analyze_query")
+rag_graph.add_edge("analyze_query", "retrieve")
 rag_graph.add_edge("retrieve", "generate_answer")
 rag_graph.add_edge("generate_answer", "check_escalation")
 rag_graph.add_edge("check_escalation", END)

@@ -4,17 +4,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --------------- LangSmith Observability ---------------
-LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "true")
-LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
-LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "hr-email-router")
-
-os.environ.setdefault("LANGSMITH_TRACING", LANGSMITH_TRACING)
-if LANGSMITH_API_KEY:
-    os.environ.setdefault("LANGSMITH_API_KEY", LANGSMITH_API_KEY)
-os.environ.setdefault("LANGSMITH_PROJECT", LANGSMITH_PROJECT)
+# LangChain/LangGraph ONLY reads LANGCHAIN_* env vars, NOT LANGSMITH_*
+os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING_V2", os.getenv("LANGSMITH_TRACING", "true"))
+_ls_key = os.getenv("LANGCHAIN_API_KEY", os.getenv("LANGSMITH_API_KEY", ""))
+if _ls_key:
+    os.environ["LANGCHAIN_API_KEY"] = _ls_key
+os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", os.getenv("LANGSMITH_PROJECT", "hr-email-router"))
 
 # --------------- OpenAI ---------------
-OPENAI_MODEL = "gpt-4o-mini"
+OPENAI_MODEL = "gpt-5.2"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 # --------------- RAG ---------------
@@ -61,7 +59,8 @@ DEPARTMENTS = {
     "people_team": {
         "keywords": (
             "Employee relations, workplace culture, conflict resolution, "
-            "team dynamics, employee engagement, HR policies, grievances"
+            "team dynamics, employee engagement, HR policies, grievances, "
+            "leave policy, parental leave, sick leave, vacation, PTO, bereavement leave"
         ),
         "sign_off": "People Team",
         "system_prompt": (
@@ -87,7 +86,7 @@ DEPARTMENTS = {
     "benefits": {
         "keywords": (
             "Health insurance, retirement plans, 401k, wellness programs, "
-            "dental, vision, life insurance, PTO, leave policy, perks"
+            "dental, vision, life insurance, benefits enrollment, perks"
         ),
         "sign_off": "Benefits Team",
         "system_prompt": (
@@ -164,6 +163,19 @@ DEPARTMENTS = {
 }
 
 DEPARTMENT_KEYS = list(DEPARTMENTS.keys())
+
+# Maps the escalation_department values from HR documents to our routing keys.
+# The documents use "people_operations" but our department key is "people_team", etc.
+DOC_ESCALATION_TO_DEPT = {
+    "people_operations": "people_team",
+    "benefits": "benefits",
+    "compliance": "compliance",
+    "it_support": "it_support",
+    "onboarding": "onboarding",
+    "payroll": "payroll",
+    "recruitment": "recruitment",
+    "talent_development": "talent_development",
+}
 
 CLASSIFIER_PROMPT_TEMPLATE = (
     "You are an HR email router. Classify the following employee query "
