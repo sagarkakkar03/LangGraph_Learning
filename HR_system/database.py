@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Any
 from sqlalchemy import (
     create_engine,
     Column,
@@ -27,8 +29,8 @@ Base = declarative_base()
 class Department(Base):
     __tablename__ = "departments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), unique=True, nullable=False)
+    id = Column[int](Integer, primary_key=True, index=True)
+    name = Column[str](String(100), unique=True, nullable=False)
 
     employees = relationship("Employee", back_populates="department")
 
@@ -39,14 +41,14 @@ class Department(Base):
 class Employee(Base):
     __tablename__ = "employees"
 
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String(10), unique=True, nullable=False, index=True)
-    name = Column(String(150), nullable=False)
-    email = Column(String(200), unique=True, nullable=False, index=True)
-    grade = Column(String(10), nullable=False)
-    is_manager = Column(Boolean, default=False)
-    country = Column(String(50), nullable=False, default="India")
-    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
+    id = Column[int](Integer, primary_key=True, index=True)
+    employee_id = Column[str](String(10), unique=True, nullable=False, index=True)
+    name = Column[str](String(150), nullable=False)
+    email = Column[str](String(200), unique=True, nullable=False, index=True)
+    grade = Column[str](String(10), nullable=False)
+    is_manager = Column[bool](Boolean, default=False)
+    country = Column[str](String(50), nullable=False, default="India")
+    department_id = Column[int](Integer, ForeignKey("departments.id"), nullable=False)
 
     department = relationship("Department", back_populates="employees")
 
@@ -110,7 +112,7 @@ class HRDocument(Base):
     content_text = Column(Text, nullable=True)
     content_summary = Column(Text, nullable=True)
     tags = Column(ARRAY(String), default=[])
-    metadata = Column(JSONB, default={})
+    doc_metadata = Column(JSONB, default={})
 
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -156,14 +158,14 @@ class HRDocumentChunk(Base):
     """
     __tablename__ = "hr_document_chunks"
 
-    id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("hr_documents.id", ondelete="CASCADE"), nullable=False)
-    chunk_index = Column(Integer, nullable=False)
-    chunk_text = Column(Text, nullable=False)
-    section_heading = Column(String(300), nullable=True)
-    token_count = Column(Integer, nullable=True)
-    metadata = Column(JSONB, default={})
-    created_at = Column(DateTime, server_default=func.now())
+    id = Column[int](Integer, primary_key=True, index=True)
+    document_id = Column[int](Integer, ForeignKey("hr_documents.id", ondelete="CASCADE"), nullable=False)
+    chunk_index = Column[int](Integer, nullable=False)
+    chunk_text = Column[str](Text, nullable=False)
+    section_heading = Column[str](String(300), nullable=True)
+    token_count = Column[int](Integer, nullable=True)
+    chunk_metadata = Column[Any](JSONB, default={})
+    created_at = Column[datetime](DateTime, server_default=func.now())
 
     document = relationship("HRDocument", back_populates="chunks")
 
@@ -182,14 +184,14 @@ class HREscalationRule(Base):
     """
     __tablename__ = "hr_escalation_rules"
 
-    id = Column(Integer, primary_key=True, index=True)
-    category = Column(String(100), nullable=False)
-    country_code = Column(String(5), nullable=True)
-    sensitivity = Column(String(20), nullable=False, default="standard")
-    escalation_email = Column(String(200), nullable=False)
-    escalation_department = Column(String(60), nullable=False)
-    auto_escalate = Column(Boolean, default=False)
-    notes = Column(Text, nullable=True)
+    id = Column[int](Integer, primary_key=True, index=True)
+    category = Column[str](String(100), nullable=False)
+    country_code = Column[str](String(5), nullable=True)
+    sensitivity = Column[str](String(20), nullable=False, default="standard")
+    escalation_email = Column[str](String(200), nullable=False)
+    escalation_department = Column[str](String(60), nullable=False)
+    auto_escalate = Column[bool](Boolean, default=False)
+    notes = Column[str](Text, nullable=True)
 
     __table_args__ = (
         Index("ix_esc_cat_country", "category", "country_code"),

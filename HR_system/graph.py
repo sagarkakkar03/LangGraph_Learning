@@ -13,6 +13,7 @@ from config import (
 )
 
 from email_service import forward_to_department
+from sqlalchemy import func
 from database import SessionLocal, Employee
 from rag_agent import ask_hr
 
@@ -57,7 +58,7 @@ def lookup_employee(state: HRState):
     """Look up sender in the employee database to enrich context."""
     db = SessionLocal()
     try:
-        emp = db.query(Employee).filter(Employee.email == state.sender_email).first()
+        emp = db.query(Employee).filter(func.lower(Employee.email) == state.sender_email.lower()).first()
         if emp:
             return {
                 "employee_name": emp.name,

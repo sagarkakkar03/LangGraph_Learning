@@ -11,10 +11,14 @@ import csv
 import os
 
 from database import init_db, SessionLocal, Department, Employee
+from dotenv import load_dotenv
+load_dotenv()
 
+DATABASE_URL = os.getenv("DATABASE_URL")
 CSV_PATH = os.path.join(os.path.dirname(__file__), "employee_data.csv")
 
-
+print(DATABASE_URL, flush=True)
+print(CSV_PATH, flush=True)
 def seed_employees():
     db = SessionLocal()
     try:

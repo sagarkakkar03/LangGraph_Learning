@@ -1,87 +1,102 @@
-# HR Email Routing & RAG System: Next Steps to Production
+# HR Email Routing & RAG System: Testing & Deployment Guide
 
-This document outlines the remaining steps required to take our HR email routing and RAG-based automated response system from its current functional state to a fully deployed, production-ready application.
+The core features of the application are now fully implemented. Because this system interacts with real email protocols (IMAP/SMTP) and filters out unauthorized users, **testing it requires specific setup**. 
 
-## Current State of the Codebase
+If you sent an email and did not get a reply, please read the **Troubleshooting** section below carefully.
 
-We have built a robust, multi-agent HR system with the following components:
-1. **Postgres Database (`database.py`)**: Stores employees, departments, HR document metadata, and escalation rules.
-2. **Data Seeding (`seed_db.py`, `seed_documents.py`)**: Scripts to populate the DB from CSVs.
-3. **Document Embedding (`embed_documents.py`)**: Reads `.docx` files, chunks them, and builds a FAISS vector index.
-4. **RAG Agent (`rag_agent.py`)**: A LangGraph workflow that retrieves relevant policy chunks based on the user's query and country, generates a grounded answer, and determines if human escalation is needed.
-5. **Email Workflow (`graph.py`)**: The main LangGraph workflow. It looks up the employee, classifies the query into a department, runs the RAG agent to get policy context, and drafts a final email response.
-6. **Email Service (`email_service.py`)**: Handles reading unread emails via IMAP and sending/forwarding emails via SMTP.
-7. **Mail Processor (`mail_processor.py`)**: A daemon that polls the inbox every 30 seconds and feeds new emails into the workflow.
-8. **API Server (`main.py`)**: A FastAPI server providing endpoints for direct RAG queries (`/ask`) and employee/department lookups.
+---
 
-## Phase 1: Local Testing & Validation
+## Phase 1: Live Local Testing (Do This Now)
 
-Before deploying, we need to ensure the system works flawlessly end-to-end in a local environment.
+To see the system actually read emails, process them through LangGraph, and send replies, follow these steps:
 
-### 1. Environment Setup
-- [ ] Create a `.env` file based on `.env.example`.
-- [ ] Add a valid `OPENAI_API_KEY`.
-- [ ] Set up a local Postgres instance and update `DATABASE_URL`.
-- [ ] Configure `LANGSMITH_API_KEY` to enable tracing and observability.
+### 1. Configure Your Test Email Account (The "HR Inbox")
+1. Create a dedicated testing email account (e.g., a free Gmail account like `your-company-hr-test@gmail.com`).
+2. Generate an **App Password** for this account (Standard passwords will not work for IMAP/SMTP).
+   - *For Gmail: Go to Manage Account -> Security -> 2-Step Verification -> App Passwords.*
+   - **Important:** Ensure IMAP is enabled in your Gmail settings (Settings -> Forwarding and POP/IMAP -> Enable IMAP).
+3. Open your `.env` file and update the IMAP and SMTP sections with this email and App Password.
+4. Set all the `EMAIL_*` variables (e.g., `EMAIL_MAIN`, `EMAIL_PAYROLL`) to this **same testing email address**. This allows you to see both the replies to the user AND the forwarded escalations in a single inbox without needing 9 different accounts.
 
-### 2. Email Configuration (Crucial Step)
-- [ ] Set up a dedicated testing email account (e.g., a Gmail account like `hr-test-bot@gmail.com`).
-- [ ] Generate an **App Password** for this account (standard passwords won't work for IMAP/SMTP).
-- [ ] Update `.env` with the IMAP and SMTP credentials.
-- [ ] For local testing, point all department emails (`EMAIL_PEOPLE_TEAM`, `EMAIL_PAYROLL`, etc.) to this same testing email address, or use email aliases (e.g., `hr-test-bot+payroll@gmail.com`) so you can see the routing happen without needing 9 separate inboxes.
+### 2. Verify Your Connection
+Run the connection test script to ensure your credentials are correct and IMAP/SMTP are reachable:
+```bash
+python test_email_connection.py
+```
+If this fails, do not proceed until it succeeds.
 
-### 3. Data Ingestion
-- [ ] Run `python seed_db.py` to populate Postgres with employees and document metadata.
-- [ ] Run `python embed_documents.py` to process the `DocsHR/` folder and build the FAISS index. Verify no errors occur during parsing.
+### 3. Whitelist Your Personal Email (CRITICAL STEP)
+**You cannot send an email from `arjun.sharma@company.com` because you do not own that domain.** If you send an email from your personal Gmail, the system will look it up in the database, fail to find it, and silently ignore it.
 
-### 4. End-to-End Email Test
-- [ ] Start the polling daemon: `python mail_processor.py`.
-- [ ] Send an email from a personal account (that matches an employee in `employee_data.csv`) to the testing HR inbox.
-  - *Test 1 (Standard)*: "What is the parental leave policy?" -> Should auto-reply with the policy.
-  - *Test 2 (Escalation)*: "I am being harassed by my manager." -> Should auto-escalate to Employee Relations/Compliance without trying to resolve it purely via docs.
-- [ ] Verify the LangSmith traces to ensure the RAG agent is retrieving the correct documents and the escalation logic is firing correctly.
+To fix this:
+1. Open `employee_data.csv`.
+2. Find an employee (e.g., `EMP001, Arjun Sharma`) and change their email address to **your actual personal email address** (e.g., `sagar.personal@gmail.com`).
+3. Open your terminal, drop the database, and re-seed it so your email is recognized:
+   ```bash
+   dropdb hr_system
+   createdb hr_system
+   python seed_db.py
+   ```
 
-## Phase 2: System Hardening & Edge Cases
+### 4. Start the Mail Processor
+The system only reads emails when the processor is running. Open a terminal and run:
+```bash
+python mail_processor.py
+```
+Leave this terminal open. It will poll the inbox every 30 seconds and print logs.
 
-### 1. Email Threading & History
-- **Current Limitation**: The system treats every email as a brand new query. It does not understand reply chains.
-- **Action**: Update `email_service.py` to extract the `In-Reply-To` or `References` headers. Update `graph.py` to fetch previous conversation history (either from the email body or a database table) so the LLM has context of the ongoing thread.
+### 5. Execute Test Scenarios
+Send the following emails from your **personal email** (the one you added to the CSV) to your **HR testing email account**. Watch the `mail_processor.py` terminal logs.
 
-### 2. Unrecognized Employees
-- **Current State**: If an email comes from an unknown address, `lookup_employee` returns empty context, but the system still tries to answer.
-- **Action**: Decide on a policy. Should we reject emails from non-company domains? Should we have a generic fallback? Update `graph.py` to handle `state.employee_name == None` gracefully (e.g., "We could not verify your employee ID. Please email from your company address.").
+* **Test A (Standard RAG Answer):**
+  * *Subject:* Leave Policy
+  * *Body:* "Hi, I need to know what the parental leave policy is for my region."
+  * *Expected:* The bot retrieves the policy, drafts a response, and replies to you. Check LangSmith for the trace!
+* **Test B (Email Threading):**
+  * *Action:* Reply directly to the bot's response from Test A with a follow-up question ("Does this apply to adopted children?").
+  * *Expected:* The bot replies within the same email thread.
+* **Test C (Attachment Auto-Escalation):**
+  * *Subject:* Medical Certificate
+  * *Body:* "Please find my sick leave certificate attached." (Attach a dummy PDF or image).
+  * *Expected:* The bot detects the attachment and auto-escalates.
 
-### 3. Attachments
-- **Current State**: `_extract_body` in `email_service.py` ignores attachments.
-- **Action**: If employees submit medical certificates or expense receipts, the system currently drops them. We need to either forward attachments to the department inbox or use a multimodal model to read them.
+---
 
-### 4. Vector Store Scalability
-- **Current State**: Using local FAISS.
-- **Action**: If deployed to the cloud (e.g., AWS/GCP), a local FAISS folder on disk is fragile (ephemeral storage). Migrate from FAISS to a managed vector database (like pgvector within our existing Postgres DB, or Pinecone/Weaviate).
+## Troubleshooting: "I sent an email but didn't get a reply"
 
-## Phase 3: Deployment & Infrastructure
+Look at the terminal where `python mail_processor.py` is running. The logs will tell you exactly what went wrong.
 
-### 1. Containerization
-- [ ] Create a `Dockerfile` that installs dependencies, copies the code, and sets the entrypoint.
-- [ ] Create a `docker-compose.yml` to run the FastAPI server, the Mail Processor daemon, and the Postgres database together.
+**1. Log says: `Ignored: Sender not found in employee database.`**
+* **Cause:** You sent the email from an address that is not in your Postgres database.
+* **Fix:** Update `employee_data.csv` with the exact email address you are sending *from*, then run `dropdb hr_system && createdb hr_system && python seed_db.py`.
 
-### 2. Cloud Hosting
-- [ ] **Database**: Provision a managed Postgres database (e.g., AWS RDS, Supabase, Neon).
-- [ ] **Compute**: Deploy the FastAPI server and the Mail Processor as separate services (e.g., AWS ECS, Render, Railway, or Heroku). The Mail Processor must run as a continuous background worker.
+**2. Log says: `IMAP error: [AUTHENTICATIONFAILED]` or `SMTP error`**
+* **Cause:** Your email provider rejected the login.
+* **Fix:** Ensure you are using an **App Password**, not your normal email password. Ensure IMAP is enabled in your Gmail settings. Run `python test_email_connection.py` to verify.
 
-### 3. Production Email Setup
-- [ ] Work with IT to provision the actual `hr@company.com` inbox and the 8 department inboxes.
-- [ ] Obtain secure OAuth2 or App Password credentials for the production IMAP/SMTP servers.
-- [ ] Update production environment variables.
+**3. Log says: `Found 0 unread email(s).`**
+* **Cause:** The email you sent was already marked as "Read" in the HR inbox, or it went to the Spam folder.
+* **Fix:** Go into the HR test inbox, find your email, mark it as "Unread", and move it to the primary Inbox.
 
-### 4. CI/CD & Document Updates
-- **Current State**: Documents are embedded manually via `embed_documents.py`.
-- **Action**: Create an admin endpoint in FastAPI (e.g., `POST /documents/upload`) that allows HR to upload a new `.docx` file. The endpoint should automatically chunk the file, update Postgres, and update the vector store, ensuring the RAG agent always has the latest policies without requiring a developer to run a script.
+**4. Log says: `SMTP credentials not set — logging email instead of sending.`**
+* **Cause:** Your `.env` file is missing the `SMTP_USER` or `SMTP_PASSWORD`.
+* **Fix:** The system processed the email successfully but just printed the reply to the terminal instead of sending it. Add your SMTP credentials to `.env`.
 
-## Phase 4: Monitoring & Analytics
+**5. No Traces in LangSmith**
+* **Cause:** The environment variables for LangSmith were previously incorrect or the workflow was never invoked.
+* **Fix:** Ensure your `.env` has `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`, and `LANGCHAIN_PROJECT`. (This has been fixed in the codebase, just ensure your `.env` is updated).
 
-1. **LangSmith Dashboards**: Set up custom dashboards in LangSmith to track:
-   - Escalation rates (how often does the AI fail to answer?).
-   - Most frequently asked questions/categories.
-   - Token usage and LLM costs per department.
-2. **Error Alerts**: Integrate Sentry or a similar tool in `mail_processor.py` so that if IMAP disconnects or the LLM API goes down, the engineering team is alerted immediately.
+---
+
+## Phase 2: Production Deployment & Hardening (Next Steps)
+
+Once local testing is successful, proceed with these steps to move to production.
+
+### 1. Infrastructure & Hosting
+- **Database:** Migrate from local Postgres to a managed database (e.g., AWS RDS, Supabase, Neon).
+- **Vector Store:** Currently, FAISS is stored locally on disk (`faiss_index/`). For a cloud deployment, migrate this to `pgvector` (inside your Postgres DB) or a managed vector DB like Pinecone so the index isn't lost when the server restarts.
+- **Compute:** Deploy the FastAPI server (web service) and the Mail Processor (background worker) to a cloud provider like AWS ECS, Render, or Railway.
+
+### 2. Document Management API
+- Currently, updating HR documents requires a developer to run `python embed_documents.py`.
+- **Action:** Add a `POST /documents/upload` endpoint in `main.py` that allows HR admins to upload new `.docx` files. The endpoint should automatically parse, chunk, embed, and update the database/vector store.
