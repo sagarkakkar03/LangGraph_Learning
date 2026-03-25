@@ -9,7 +9,7 @@ from app.core.config import EMAIL_ADDRESSES
 from app.db.database import init_db, get_db, Employee, Department
 from app.agents.graph import workflow
 from app.agents.rag_agent import ask_hr
-
+from langserve import add_routes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -17,6 +17,13 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="HR Email Routing System", lifespan=lifespan)
+
+# Add LangServe routes for the workflow
+add_routes(
+    app,
+    workflow,
+    path="/hr-agent"
+)
 
 
 # ---- Pydantic schemas ----
