@@ -149,7 +149,3 @@ HR_system/
 ├── run_worker.py       # Background email worker entry point
 └── streamlit_app.py    # Streamlit UI entry point
 ```
-
-## ☁️ Deployment
-
-For detailed instructions on deploying this application to production (Streamlit Community Cloud, Render, Railway, or Google Cloud Platform), please refer to [DEPLOYMENT.md](DEPLOYMENT.md).
