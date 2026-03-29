@@ -18,8 +18,8 @@ OMEGA reads incoming HR emails, classifies them by department, uses Retrieval-Au
 
 - **Workflow Orchestration**: LangGraph
 - **LLM & Embeddings**: OpenAI (`gpt-4o-mini`, `text-embedding-3-small`)
-- **Vector Store**: Pinecone (Cloud)
-- **Database**: PostgreSQL (SQLAlchemy ORM)
+- **Vector Store**: Faiss
+- **Database**: PostgreSQL (SQLAlchemy ORM) (Cloud Superbase)
 - **API Framework**: FastAPI & LangServe
 - **Frontend**: Streamlit
 
@@ -29,7 +29,7 @@ OMEGA reads incoming HR emails, classifies them by department, uses Retrieval-Au
 
 ### Prerequisites
 - Python 3.11+
-- PostgreSQL installed and running locally
+- PostgreSQL is installed and running locally
 - OpenAI API Key
 - Gmail account with App Passwords enabled (for IMAP/SMTP)
 - [LangSmith](https://smith.langchain.com/) account (optional, for observability)
